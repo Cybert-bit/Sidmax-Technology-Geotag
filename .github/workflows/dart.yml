@@ -1,17 +1,21 @@
-name: Flutter & IPA Build CI
+
+name: Flutter Build & GitHub Release
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
-  workflow_dispatch: # Allows manual trigger from GitHub Actions UI
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  # ─── 1. Code Analysis & Linting ───────────────────────────
   analyze:
     name: Analyze & Lint
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -19,13 +23,13 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
-          java-version: '17'
+          distribution: zulu
+          java-version: "17"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
           cache: true
 
       - name: Install Dependencies
@@ -34,11 +38,11 @@ jobs:
       - name: Analyze Project
         run: flutter analyze
 
-  # ─── 2. Build iOS / IPA (macOS runner) ────────────────────
   build-ipa:
     name: Build iOS IPA
     needs: analyze
     runs-on: macos-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -46,7 +50,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
           cache: true
 
       - name: Install Dependencies
@@ -56,15 +60,14 @@ jobs:
         run: |
           cd ios
           pod install
-          cd ..
 
-      - name: Build iOS Release (No Code Signing)
+      - name: Build iOS Release
         run: flutter build ios --release --no-codesign
 
       - name: Package IPA
         run: |
           mkdir -p Payload
-          cp -r build/ios/iphoneos/Runner.app Payload/
+          cp -R build/ios/iphoneos/Runner.app Payload/
           zip -r -y SidmaxGeotag.ipa Payload
           rm -rf Payload
 
@@ -75,18 +78,11 @@ jobs:
           path: SidmaxGeotag.ipa
           retention-days: 14
 
-      - name: Upload Runner.app (Unzipped)
-        uses: actions/upload-artifact@v4
-        with:
-          name: Runner-app-build
-          path: build/ios/iphoneos/Runner.app
-          retention-days: 14
-
-  # ─── 3. Build Android APK ─────────────────────────────────
   build-apk:
     name: Build Android APK
     needs: analyze
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -94,26 +90,23 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
-          java-version: '17'
+          distribution: zulu
+          java-version: "17"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
           cache: true
 
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Install Android CMake 3.22.1 & NDK
+      - name: Install Android SDK Components
         run: |
           SDKMANAGER="${ANDROID_HOME:-$ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
-          if [ ! -f "$SDKMANAGER" ]; then
-            SDKMANAGER="sdkmanager"
-          fi
-          yes | $SDKMANAGER --licenses || true
-          $SDKMANAGER --install "cmake;3.22.1"
+          yes | "$SDKMANAGER" --licenses || true
+          "$SDKMANAGER" --install "cmake;3.22.1"
 
       - name: Build APK Release
         run: flutter build apk --release
@@ -124,3 +117,47 @@ jobs:
           name: SidmaxGeotag-Android-APK
           path: build/app/outputs/flutter-apk/*.apk
           retention-days: 14
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-ipa, build-apk]
+    if: >-
+      github.event_name != 'pull_request' &&
+      (github.ref == 'refs/heads/main' ||
+       github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download APK Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SidmaxGeotag-Android-APK
+          path: release-files
+
+      - name: Download IPA Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: SidmaxGeotag-iOS-IPA
+          path: release-files
+
+      - name: Generate Release Tag
+        id: version
+        shell: bash
+        run: |
+          echo "tag=v$(date -u +'%Y.%m.%d')-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Release and Upload Files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          gh release create "$TAG" release-files/* \
+            --repo "$REPOSITORY" \
+            --title "Sidmax Geotag $TAG" \
+            --notes "Automated Flutter release.
+
+          Android APK and iOS IPA were built using GitHub Actions.
+
+          Commit: $GITHUB_SHA" \
+            --target "$GITHUB_SHA"
