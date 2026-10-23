@@ -106,6 +106,15 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
+      - name: Install Android CMake 3.22.1 & NDK
+        run: |
+          SDKMANAGER="${ANDROID_HOME:-$ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -f "$SDKMANAGER" ]; then
+            SDKMANAGER="sdkmanager"
+          fi
+          yes | $SDKMANAGER --licenses || true
+          $SDKMANAGER --install "cmake;3.22.1"
+
       - name: Build APK Release
         run: flutter build apk --release
 
@@ -113,5 +122,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SidmaxGeotag-Android-APK
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/*.apk
           retention-days: 14
