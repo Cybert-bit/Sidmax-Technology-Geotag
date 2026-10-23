@@ -1,0 +1,52 @@
+name: flutter_application_1
+description: "Sidmax Technology Geotag - GPS Camera Location on Photo"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # Camera
+  camera: 0.12.1
+
+  # Location & Maps
+  geolocator: ^13.0.2
+  geocoding: 5.0.0
+  google_maps_flutter: ^2.10.1
+
+  # File & Storage
+  path_provider: ^2.1.5
+  path: ^1.9.1
+  shared_preferences: ^2.3.5
+
+  # Permissions
+  permission_handler: ^11.3.1
+
+  # Utilities
+  intl: ^0.20.2
+
+  # Image processing
+  image: ^4.5.3
+
+  # UI
+  google_fonts: ^6.2.1
+  flutter_animate: ^4.5.2
+  image_picker: ^1.2.4
+  sensors_plus: ^7.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
